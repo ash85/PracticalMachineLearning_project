@@ -1,0 +1,120 @@
+---
+title: "Practical Machine Learning Project"
+author: "Aswath"
+date: "August 22, 2015"
+output: html_document
+---
+
+##Summary
+
+The goal of this project is to predict the manner in which someone did the exercise. This is the "classe" variable in the training set. Using all other variables, the manner is  predicted using Random Forest. 
+
+  
+```{r, cache = T}
+
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+
+```
+Source Files:
+
+Download the data from these links:
+
+Training Data "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+
+TestingData "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+
+#### Read the Data
+```{r, cache = T}
+setwd("~/github/practical-MachineLearning")
+trainRaw <- read.csv("./data/pml-training.csv")
+testRaw <- read.csv("./data/pml-testing.csv")
+
+dim(trainRaw)
+```
+
+#### Clean the data, Remove columns that have NA, timestamps,window,user name columns and keep numeric variables only
+
+```{r, cache = T}
+trainData <- trainRaw[, colSums(is.na(trainRaw)) == 0] 
+testData <- testRaw[, colSums(is.na(testRaw)) == 0] 
+
+trd <- dim(trainData)
+ted <-dim(testData)
+
+classe <- trainData[,trd[2]]
+my_list = c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+train_rem_vars <- names(trainData) %in% my_list
+train_clean <- trainData[, !train_rem_vars]
+train_clean <- train_clean[, sapply(train_clean, is.numeric)]
+train_clean$classe <- classe
+
+test_rem_vars <- names(testData) %in% my_list
+test_clean <- testData[, !test_rem_vars]
+test_clean <- test_clean[, sapply(test_clean, is.numeric)]
+
+```
+The cleaned training data has 19622 observations and 53 variables
+The testing data has 20 observations and 53 variables. 
+
+#### Training / validation - Data Partition
+ 
+```{r, cache = T}
+
+set.seed(121212) 
+inTrain <- createDataPartition(train_clean$classe, p=0.70, list=F)
+training <- train_clean[inTrain, ]
+validation <- train_clean[-inTrain, ]
+
+
+```
+
+#### Model Fit
+ Random Forest algorithm is being used to predict the activity because it is very robust to non linear relationships and reduces overfiting. The random forest is built using 100 trees
+ 
+ 
+```{r, cache = T}
+
+library(doMC)
+registerDoMC(cores = 5)
+
+start_time = proc.time()
+controlRf <- trainControl(method="cv",5)
+modelRf <- train(classe ~ ., data=training, method="rf",trControl=controlRf, ntree=100)
+end_time = proc.time()
+print (end_time - start_time)
+modelRf
+
+
+```
+Then, we estimate the performance of the model on the validation data set.  
+```{r, cache = T}
+predictRf <- predict(modelRf, validation)
+confusionMatrix(validation$classe, predictRf)
+```
+
+The accuracy of the model for validation data is 99.37%.
+
+#### Predicting Test Data Set
+  
+```{r, cache = T}
+result <- predict(modelRf, test_clean)
+result
+
+
+pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("problem_id_",i,".txt")
+        write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+}
+
+pml_write_files(result)
+
+```
+
